@@ -1,5 +1,6 @@
 library(tidyverse)
 library(reshape)
+library(plotly)
 
 dfRawData <- read.csv('WorldBankHealthData.csv')
 
@@ -60,12 +61,26 @@ df <- dfRawData[!(dfRawData$country_name %in% non_contries), ]
 #We expect 6 values per country per year.
 df_count <- count(df,country_name,year)
 
-#The output below makes it clear there is a lot of missing data. Since
+#scatter plot to visualize how many years have complete data per country. If the 
+#is complete there would be 6 data points (n) per year per country, so all points
+#would form a horizontal line at n = 6
+ggplot(df_count, aes(x = year, y = n))+
+  geom_jitter()
+
+#scatter plot to visualize how many countries have complete data for each year. If the
+#is complete there would be 6 data points (n) per country per year, so all points
+#would form a horizontal line at n = 6
+ggplot(df_count, aes(x = country_name, y = n))+
+  geom_jitter()+
+  theme(axis.text.x = element_blank())+
+  xlab('Country')
+
+#The output above makes it clear there is a lot of missing data. Since
 #excluding countries or years with incomplete data would greatly reduce the
 #dataset, absent values will just have to be dealt with
 
 #Check completeness of life expectancy data----
-#This is the most important variable, so we'll use the image() function to see
+#This is the most important variable, so we'll use the image() function to visualize
 #the extent of missing life expectancy data.
 
 #filter for only life expectancy values
@@ -83,8 +98,8 @@ df_binary[, names(df_binary) != 'country_name'][df_binary[, names(df_binary) != 
 df_binary <- column_to_rownames(df_binary, 'country_name')
 mat_binary <- as.matrix(df_binary)
 
-#Make image of density of life expectancy values----
-image(z = mat_binary)
+#Make image to indicate presence of life expectancy data----
+image(z = mat_binary, yaxt = "n", xaxt = "n", xlab = 'Countries', ylab = 'Year')
 
 #We can see that most countries (x axis) have most or all of the life expectancy
 #data. However, there are a few that have very little. It wouldn't make sense to 
@@ -109,3 +124,35 @@ df_lowInfo <- df_summed[df_summed$x < 25, ]
 
 #extract list of countries to remove
 countries_to_remove <- c(df_lowInfo$country_name)
+
+#remove these countries from the dataframe
+df <- df[!(df$country_name %in% countries_to_remove), ]
+
+#make boxplots for each variable to check for any anomalies such as outliers.
+#Ideally I would do one boxplot per country per variable, but because there are 
+#so many countries, this wouldn't work well. So, one boxplot per variable
+
+p1 <- ggplot(df, aes(y  = value, x = indicator_name))+
+  geom_boxplot()+
+  facet_wrap(~indicator_name, scales = 'free')
+
+ggplotly(p1)
+
+#density plots are also helpful in visualizing the distribution of data
+p2 <- ggplot(df, aes(x  = value))+
+  geom_density()+
+  facet_wrap(~indicator_name, scales = 'free')
+
+ggplotly(p2)
+
+#From the boxplots we see 11 datapoints with life expectancy = 1 (probably not real).
+#Also saw instances of expenditure per capita = 0 and 0 physicians per 1,000 people.
+#Although it seems unlikely, since we're considering data from nearly every
+#country as early as 1970, I'll consider this as possible
+
+#remove data with life expectancy < 10, since this is probably not real
+df_clean <- df[!(df$indicator_name == 'Life expectancy at birth, total (years)' &
+           df$value < 10), ]
+
+#export clean data
+write.csv(df_clean,'Data.csv',row.names = FALSE)
