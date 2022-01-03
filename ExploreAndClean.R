@@ -148,11 +148,22 @@ ggplotly(p2)
 #From the boxplots we see 11 datapoints with life expectancy = 1 (probably not real).
 #Also saw instances of expenditure per capita = 0 and 0 physicians per 1,000 people.
 #Although it seems unlikely, since we're considering data from nearly every
-#country as early as 1970, I'll consider this as possible
+#country as early as 1970, I'll consider this as possible. Also, unlike the data
+#for obesity and diabetes with a 'peak' at 1.0, here there is no obvious peak at 0
 
 #remove data with life expectancy < 10, since this is probably not real
-df_clean <- df[!(df$indicator_name == 'Life expectancy at birth, total (years)' &
+df <- df[!(df$indicator_name == 'Life expectancy at birth, total (years)' &
            df$value < 10), ]
+
+#remove data with obesity == 1.0, since there is a disproportately high amount of 
+#values here, so this is probably not real
+df <- df[!(df$indicator_name == 'Prevalence of overweight (% of adults)' &
+                   df$value == 1), ]
+
+#remove data with diabetes == 1.0, since there is a disproportately high amount of 
+#values here, so this is probably not real
+df_clean <- df[!(df$indicator_name == 'Diabetes prevalence (% of population ages 20 to 79)' &
+                   df$value == 1), ]
 
 #export clean data
 write.csv(df_clean,'Data.csv',row.names = FALSE)
