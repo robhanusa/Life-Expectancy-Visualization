@@ -2,13 +2,14 @@ library(tidyverse)
 library(reshape)
 library(plotly)
 
+#Import data----
 dfRawData <- read.csv('WorldBankHealthData.csv')
 
 #check what countries are included
 print(sort(unique(dfRawData$country_name)))
 
 #Upon reviewing, the following entries are not countries, and will be removed
-#non_countries----
+#Create variable non_countries----
 non_contries <- c("Africa Eastern and Southern",
                   "Africa Western and Central",
                   "Arab World",
@@ -61,13 +62,13 @@ df <- dfRawData[!(dfRawData$country_name %in% non_contries), ]
 #We expect 6 values per country per year.
 df_count <- count(df,country_name,year)
 
-#scatter plot to visualize how many years have complete data per country. If the 
+#scatter plot to visualize how many years have complete data per country. If the data 
 #is complete there would be 6 data points (n) per year per country, so all points
 #would form a horizontal line at n = 6
 ggplot(df_count, aes(x = year, y = n))+
   geom_jitter()
 
-#scatter plot to visualize how many countries have complete data for each year. If the
+#scatter plot to visualize how many countries have complete data for each year. If the data
 #is complete there would be 6 data points (n) per country per year, so all points
 #would form a horizontal line at n = 6
 ggplot(df_count, aes(x = country_name, y = n))+
@@ -77,10 +78,12 @@ ggplot(df_count, aes(x = country_name, y = n))+
 
 #The output above makes it clear there is a lot of missing data. Since
 #excluding countries or years with incomplete data would greatly reduce the
-#dataset, absent values will just have to be dealt with
+#dataset, absent values will just have to be dealt with. The user can be
+#restricted from generating graphs with too little data, for example.
 
 #Check completeness of life expectancy data----
-#This is the most important variable, so we'll use the image() function to visualize
+#This is the most important variable, and we're concerned with 2 dimensions (year and country)
+#For this unique case, I can use the image() function for a rough visualization of
 #the extent of missing life expectancy data.
 
 #filter for only life expectancy values
@@ -90,6 +93,7 @@ df_LE <- df[df$indicator_name == 'Life expectancy at birth, total (years)', ]
 df_LE_wide <- cast(df_LE, country_name~year)
 
 #convert to a df with 1 if value exists, otherwise 0 if NA. Exclude country_name column
+#this will be used to make a binary image
 df_binary <- df_LE_wide
 df_binary[is.na(df_binary)] <- 0
 df_binary[, names(df_binary) != 'country_name'][df_binary[, names(df_binary) != 'country_name'] > 0] <- 1
@@ -155,15 +159,15 @@ ggplotly(p2)
 df <- df[!(df$indicator_name == 'Life expectancy at birth, total (years)' &
            df$value < 10), ]
 
-#remove data with obesity == 1.0, since there is a disproportately high amount of 
+#remove data with obesity == 1.0, since there is a disproportionately high amount of 
 #values here, so this is probably not real
 df <- df[!(df$indicator_name == 'Prevalence of overweight (% of adults)' &
                    df$value == 1), ]
 
-#remove data with diabetes == 1.0, since there is a disproportately high amount of 
+#remove data with diabetes == 1.0, since there is a disproportionately high amount of 
 #values here, so this is probably not real
 df_clean <- df[!(df$indicator_name == 'Diabetes prevalence (% of population ages 20 to 79)' &
                    df$value == 1), ]
 
-#export clean data
+#Export clean data----
 write.csv(df_clean,'Data.csv',row.names = FALSE)
