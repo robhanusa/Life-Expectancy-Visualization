@@ -4,30 +4,49 @@ library(tidyverse)
 library(plotly)
 library(reshape)
 
-df <- read.csv('Data.csv')
-df_life_expectancy <- df[df$indicator_name == 'Life expectancy at birth, total (years)', ]
+df <- read.csv("Data.csv")
+df_life_expectancy <- df[df$indicator_name == "Life expectancy at birth, total (years)", ]
 
-#UI ----
+# UI ----
 ui <- dashboardPage(
   
   skin = "purple",
   
-  #Header ----
+  # Header ----
   dashboardHeader(
     title = "Life Expectancy Comparison",
     titleWidth = 300
   ),
-  #Sidebar ----
+  
+  # Sidebar ----
   dashboardSidebar(
     width = 300,
+    
+    # Header for input section
     h4("Choose Inputs", style = "padding-left:15px"),
-    sliderInput('year_range', 'Indicate Year Range', 1970, 2020, step = 1,
-                value = c(1970,2019), sep = ""),
-    selectInput('countries', label = 'Select Contries to Graph', multiple = TRUE,
-                choices = sort(unique(df_life_expectancy$country_name)),
-                selected = c('United States', 'Belgium', 'France'))
+    
+    # Slider input
+    sliderInput(
+      inputId = 'year_range', 
+      label = 'Indicate Year Range', 
+      min = 1970, 
+      max = 2020, 
+      step = 1,
+      value = c(1970, 2019), 
+      sep = ""
+    ),
+    
+    # Dropdown input
+    selectInput(
+      inputId = 'countries', 
+      label = 'Select Countries to Graph', 
+      multiple = TRUE,
+      choices = sort(unique(df_life_expectancy$country_name)),
+      selected = c('United States', 'Belgium', 'France')
+    )
   ),
-  #Body ----
+  
+  # Body ----
   dashboardBody(
     tabsetPanel(
       type = "tabs",
@@ -46,43 +65,54 @@ ui <- dashboardPage(
   )
 )
 
-#Server----
+# Server----
 server <- function(input, output) {
   
-  #Clean df for p1----
-  df_p1 <- reactive(df[df$indicator_name == 'Life expectancy at birth, total (years)' &
-                df$year >= input$year_range[1] & df$year <= input$year_range[2] &
-                df$country_name %in% input$countries, ])
+  # Clean df for p1----
+  df_p1 <- reactive({
+    df[df$indicator_name == 'Life expectancy at birth, total (years)' &
+         df$year >= input$year_range[1] & df$year <= input$year_range[2] &
+         df$country_name %in% input$countries, ]
+    })
   
-  #Life Expectancy by year graph----
+  # Life Expectancy by year graph----
   output$p1 <- renderPlotly({
-    p1 <- plot_ly(data = df_p1(), x = ~year, y = ~value, 
-                  color = ~country_name, text = ~country_name,
-                  hovertemplate = paste(paste0('<extra></extra>Country: %{text}\nLife Expectancy: %{y}\nYear: %{x}')))
-    
-    p1 <- p1 %>% add_trace(type = 'scatter', mode = 'lines+markers')
-    
-    p1 <- p1 %>% layout(xaxis = list(title = 'Year'), 
-                        yaxis = list(title = 'Life Expectancy', hoverformat = '.1f'))
-    return(p1)
+    # Create initial plotly object
+    p1 <- plot_ly(
+      data = df_p1(), 
+      x = ~year, 
+      y = ~value, 
+      color = ~country_name, 
+      text = ~country_name,
+      hovertemplate = paste(
+        paste0('<extra></extra>Country: %{text}\nLife Expectancy: %{y}\nYear: %{x}')
+      )
+    ) %>% 
+      # Add scatter trace with lines and markers
+      add_trace(type = 'scatter', mode = 'lines+markers') %>%
+      # Set layout options for the plot
+      layout(
+        xaxis = list(title = 'Year'), 
+        yaxis = list(title = 'Life Expectancy', hoverformat = '.1f')
+      )
   
   })
   
-  #Clean df for p2----
+  # Clean df for p2----
   df_p2 <- reactive(df[df$year == 2010, ])
   df_p2_wide <- reactive(cast(df_p2(), country_name~indicator_name))
 
-  #the below function will make abbreviations (ie first word only) for each metric
-  #and make a list that links the abbreviations to the full name. This is because
-  #it is difficult to reference a column name with spaces or special characters, 
-  #but I want the full names to remain visible for the user.
+  # This function will make abbreviations (i.e. first word only) for each metric
+  # and make a list that links the abbreviations to the full name. This is 
+  # because it is difficult to reference a column name with spaces or special
+  # characters, but I want the full names to remain visible for the user.
   make_metric_abbrs <- function(df_temp) {
     
-    #Create vector of metrics (indicators) from dataframe. 
+    # Create vector of metrics (indicators) from dataframe. 
     metrics_names <- colnames(df_temp)
     
-    #replace column names with first word only
-    metrics_abbr <- sub(' .*','',metrics_names)
+    # Replace column names with first word only
+    metrics_abbr <- sub(' .*', '', metrics_names)
     names(df_temp) <- metrics_abbr
     metrics_names_list <- as.list(metrics_names)
     metrics_abbr_list <- as.list(metrics_abbr)
@@ -93,8 +123,9 @@ server <- function(input, output) {
   
   metrics_abbr_list <- reactive(make_metric_abbrs(df_p2_wide()))
   
-  #quick function to make a new df with the abbreviated column names
-  #this requires a function instead of a single line because of the reactive context
+  # Function to make a new df with the abbreviated column names
+  # This requires a function instead of a single line because of the reactive 
+  # context
   change_col_names <- function(df_temp) {
     names(df_temp) <- metrics_abbr_list()
     return(df_temp)
@@ -102,22 +133,23 @@ server <- function(input, output) {
   
   df_p2_wide2 <- reactive(change_col_names(df_p2_wide()))
   
-  #Factor comparison graph----
+  # Factor comparison graph----
   output$p2 <- renderPlotly({
     req(input$metric)
-    p2 <- ggplot(data = df_p2_wide2(), aes_string(x = metrics_abbr_list()[[input$metric]], 
-                                                 y = 'Life',
-                                                 text = 'country_name')) +
-      geom_point()+
-      xlab(input$metric)+
-      ylab('Life Expectancy')+
-      ggtitle(paste0('Life expectancy in 2010 versus ', input$metric))+
+    p2 <- ggplot(data = df_p2_wide2(), 
+                 aes_string(x = metrics_abbr_list()[[input$metric]], 
+                            y = 'Life',
+                            text = 'country_name')) +
+      geom_point() +
+      xlab(input$metric) +
+      ylab('Life Expectancy') +
+      ggtitle(paste0('Life expectancy in 2010 versus ', input$metric)) +
       theme(plot.title = element_text(hjust = 0.5))
     
     ggplotly(p2, tooltip = 'text')
   })
   
-  #Panel to choose factor----
+  # Panel to choose factor----
   output$factor_choice <- renderUI({
     div(
       class = 'container',
@@ -126,11 +158,12 @@ server <- function(input, output) {
         class = 'jumbotron',
         style = 'background-color: white',
         h4('Choose a factor to compare life expectancy against'),
-        selectInput('metric', 'Select metric:', 
+        selectInput(inputId = 'metric', 
+                    label = 'Select metric:',
                     choices = sort(unique(df$indicator_name)[-3]),
                     width = 400)
       )
-  )
+    )
   })
 }
 
